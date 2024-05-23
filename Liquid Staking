@@ -1,0 +1,74 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract LiquidStaking is ERC20, Ownable {
+    using SafeERC20 for IERC20;
+
+    IERC20 public stakingToken;
+    uint256 public totalStaked;
+    uint256 public rewardRate;
+    mapping(address => uint256) public lastUpdateTime;
+    mapping(address => uint256) public rewards;
+
+    event Staked(address indexed user, uint256 amount);
+    event Unstaked(address indexed user, uint256 amount);
+    event RewardPaid(address indexed user, uint256 reward);
+
+    constructor(IERC20 _stakingToken, uint256 _rewardRate) ERC20("StakedToken", "sTOKEN") {
+        stakingToken = _stakingToken;
+        rewardRate = _rewardRate;
+    }
+
+    function stake(uint256 amount) external {
+        require(amount > 0, "Cannot stake 0");
+
+        updateReward(msg.sender);
+
+        stakingToken.safeTransferFrom(msg.sender, address(this), amount);
+        totalStaked += amount;
+        _mint(msg.sender, amount);
+
+        emit Staked(msg.sender, amount);
+    }
+
+    function unstake(uint256 amount) external {
+        require(amount > 0, "Cannot unstake 0");
+
+        updateReward(msg.sender);
+
+        totalStaked -= amount;
+        _burn(msg.sender, amount);
+        stakingToken.safeTransfer(msg.sender, amount);
+
+        emit Unstaked(msg.sender, amount);
+    }
+
+    function claimReward() external {
+        updateReward(msg.sender);
+
+        uint256 reward = rewards[msg.sender];
+        if (reward > 0) {
+            rewards[msg.sender] = 0;
+            stakingToken.safeTransfer(msg.sender, reward);
+
+            emit RewardPaid(msg.sender, reward);
+        }
+    }
+
+    function updateReward(address account) internal {
+        uint256 currentTime = block.timestamp;
+        uint256 stakedAmount = balanceOf(account);
+        if (stakedAmount > 0) {
+            rewards[account] += stakedAmount * rewardRate * (currentTime - lastUpdateTime[account]) / 1e18;
+        }
+        lastUpdateTime[account] = currentTime;
+    }
+
+    function setRewardRate(uint256 _rewardRate) external onlyOwner {
+        rewardRate = _rewardRate;
+    }
+}
