@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+
+contract StableCoin is ERC20, Ownable {
+    uint256 public cap;
+
+    event Minted(address indexed to, uint256 amount);
+    event Burned(address indexed from, uint256 amount);
+
+    constructor(uint256 _initialSupply, uint256 _cap) ERC20("StableCoin", "STBL") {
+        require(_initialSupply <= _cap, "Initial supply exceeds cap");
+        cap = _cap;
+        _mint(msg.sender, _initialSupply);
+    }
+
+    function mint(address to, uint256 amount) public onlyOwner {
+        require(totalSupply() + amount <= cap, "Minting exceeds cap");
+        _mint(to, amount);
+        emit Minted(to, amount);
+    }
+
+    function burn(uint256 amount) public {
+        _burn(msg.sender, amount);
+        emit Burned(msg.sender, amount);
+    }
+
+    function setCap(uint256 _cap) external onlyOwner {
+        require(_cap >= totalSupply(), "New cap is below current total supply");
+        cap = _cap;
+    }
+}
